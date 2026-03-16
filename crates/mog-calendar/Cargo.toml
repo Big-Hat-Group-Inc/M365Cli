@@ -1,0 +1,14 @@
+[package]
+name = "mog-calendar"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+mog-core = { workspace = true }
+mog-graph = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }
+tokio = { workspace = true }
+reqwest = { workspace = true }

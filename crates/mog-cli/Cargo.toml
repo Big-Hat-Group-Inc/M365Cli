@@ -1,0 +1,27 @@
+[package]
+name = "mog-cli"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "mog"
+path = "src/main.rs"
+
+[dependencies]
+mog-core = { workspace = true }
+mog-graph = { workspace = true }
+mog-auth = { workspace = true }
+mog-mail = { workspace = true }
+mog-calendar = { workspace = true }
+mog-files = { workspace = true }
+clap = { workspace = true }
+clap_complete = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }
+atty = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+reqwest = { workspace = true }

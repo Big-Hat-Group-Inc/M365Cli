@@ -1,4 +1,29 @@
+use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
 use std::collections::HashMap;
+
+/// Percent-encode characters that are unsafe in URL query values.
+/// Preserves alphanumerics, dots, hyphens, underscores, and tildes (RFC 3986 unreserved).
+const QUERY_ENCODE_SET: &AsciiSet = &CONTROLS
+    .add(b' ')
+    .add(b'!')
+    .add(b'#')
+    .add(b'$')
+    .add(b'%')
+    .add(b'&')
+    .add(b'\'')
+    .add(b'(')
+    .add(b')')
+    .add(b'*')
+    .add(b'+')
+    .add(b',')
+    .add(b'/')
+    .add(b':')
+    .add(b';')
+    .add(b'=')
+    .add(b'?')
+    .add(b'@')
+    .add(b'[')
+    .add(b']');
 
 /// Maps human-friendly scope bundle names to Graph permissions
 pub struct ScopeBundleMapper;
@@ -107,6 +132,24 @@ impl ScopeBundleMapper {
         map.insert("files download", vec!["Files.Read"]);
         map.insert("files export", vec!["Files.Read"]);
         map.insert("files upload", vec!["Files.ReadWrite"]);
+        map.insert("contacts list", vec!["Contacts.Read"]);
+        map.insert("contacts search", vec!["Contacts.Read"]);
+        map.insert("contacts read", vec!["Contacts.Read"]);
+        map.insert("people relevant", vec!["People.Read"]);
+        map.insert("people search", vec!["People.Read"]);
+        map.insert("tasks lists", vec!["Tasks.ReadWrite"]);
+        map.insert("tasks list", vec!["Tasks.ReadWrite"]);
+        map.insert("tasks create", vec!["Tasks.ReadWrite"]);
+        map.insert("tasks update", vec!["Tasks.ReadWrite"]);
+        map.insert("tasks complete", vec!["Tasks.ReadWrite"]);
+        map.insert("tasks delete", vec!["Tasks.ReadWrite"]);
+        map.insert("directory users list", vec!["User.ReadBasic.All"]);
+        map.insert("directory users search", vec!["User.ReadBasic.All"]);
+        map.insert("directory users read", vec!["User.ReadBasic.All"]);
+        map.insert("directory groups list", vec!["GroupMember.Read.All"]);
+        map.insert("directory groups search", vec!["GroupMember.Read.All"]);
+        map.insert("directory groups read", vec!["GroupMember.Read.All"]);
+        map.insert("directory groups members", vec!["GroupMember.Read.All"]);
         map
     }
 
@@ -115,7 +158,10 @@ impl ScopeBundleMapper {
         let scopes = Self::command_scopes();
         let required = scopes.get(command)?;
 
-        let mut explanation = format!("Command '{}' requires the following permissions:\n\n", command);
+        let mut explanation = format!(
+            "Command '{}' requires the following permissions:\n\n",
+            command
+        );
         for scope in required {
             let reason = match *scope {
                 "Mail.ReadBasic" => "List mail message headers (from, to, subject, date)",
@@ -125,6 +171,13 @@ impl ScopeBundleMapper {
                 "Calendars.ReadWrite" => "Create, update, and delete calendar events",
                 "Files.Read" => "Read files in OneDrive (search, download, export)",
                 "Files.ReadWrite" => "Read and write files in OneDrive (upload)",
+                "Contacts.Read" => "Read the user's personal contacts",
+                "People.Read" => "Read relevance-ranked people and search the people directory",
+                "Tasks.ReadWrite" => "Read and write the user's To Do tasks and task lists",
+                "User.ReadBasic.All" => {
+                    "Read basic profile information of all users in the organization"
+                }
+                "GroupMember.Read.All" => "Read group memberships and group details",
                 _ => "Required for this operation",
             };
             explanation.push_str(&format!("  • {} — {}\n", scope, reason));
@@ -139,17 +192,12 @@ impl ScopeBundleMapper {
     /// Generate admin consent URL
     pub fn admin_consent_url(tenant_id: &str, client_id: &str, scopes: &[String]) -> String {
         let scope_str = scopes.join(" ");
+        let encoded_scope = utf8_percent_encode(&scope_str, QUERY_ENCODE_SET).to_string();
         format!(
             "https://login.microsoftonline.com/{}/adminconsent?client_id={}&scope={}&redirect_uri=http://localhost",
-            tenant_id, client_id, urlencoding(&scope_str)
+            tenant_id, client_id, encoded_scope
         )
     }
-}
-
-fn urlencoding(s: &str) -> String {
-    s.replace(' ', "%20")
-        .replace(':', "%3A")
-        .replace('/', "%2F")
 }
 
 #[cfg(test)]

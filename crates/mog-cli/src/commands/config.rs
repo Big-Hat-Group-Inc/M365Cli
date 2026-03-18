@@ -21,20 +21,24 @@ pub async fn run(command: &ConfigCommands, format: OutputFormat) -> Result<(), M
                 "output.color" => config.output.color = value.clone(),
                 "graph.defaultApiVersion" => config.graph.default_api_version = value.clone(),
                 "graph.maxRetries" => {
-                    config.graph.max_retries = value.parse()
+                    config.graph.max_retries = value
+                        .parse()
                         .map_err(|_| MogError::Validation(format!("Invalid number: {}", value)))?;
                 }
                 "graph.defaultPageSize" => {
-                    config.graph.default_page_size = value.parse()
+                    config.graph.default_page_size = value
+                        .parse()
                         .map_err(|_| MogError::Validation(format!("Invalid number: {}", value)))?;
                 }
                 "graph.maxResults" => {
-                    config.graph.max_results = value.parse()
+                    config.graph.max_results = value
+                        .parse()
                         .map_err(|_| MogError::Validation(format!("Invalid number: {}", value)))?;
                 }
                 "logging.level" => config.logging.level = value.clone(),
                 "logging.redactBodies" => {
-                    config.logging.redact_bodies = value.parse()
+                    config.logging.redact_bodies = value
+                        .parse()
                         .map_err(|_| MogError::Validation(format!("Invalid boolean: {}", value)))?;
                 }
                 _ => return Err(MogError::Validation(format!("Unknown config key: {}", key))),

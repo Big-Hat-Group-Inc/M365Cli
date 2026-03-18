@@ -4,12 +4,8 @@ use mog_core::output::{OutputFormat, OutputRenderer};
 use serde_json::json;
 
 pub async fn run(cli: &Cli, command: &FilesCommands, format: OutputFormat) -> Result<(), MogError> {
-    let client = super::build_graph_client(
-        cli.profile.as_deref(),
-        &cli.api_version,
-        cli.trace,
-        cli.top,
-    )?;
+    let client =
+        super::build_graph_client(cli.profile.as_deref(), &cli.api_version, cli.trace, cli.top)?;
 
     match command {
         FilesCommands::Search { q } => {
@@ -42,7 +38,11 @@ pub async fn run(cli: &Cli, command: &FilesCommands, format: OutputFormat) -> Re
             Ok(())
         }
 
-        FilesCommands::Export { item_id, format: export_format, out } => {
+        FilesCommands::Export {
+            item_id,
+            format: export_format,
+            out,
+        } => {
             let path = mog_files::export_file(&client, item_id, export_format, out).await?;
             eprintln!("Exported to: {}", path);
             let result = json!({"status": "exported", "path": path, "format": export_format});
@@ -50,14 +50,14 @@ pub async fn run(cli: &Cli, command: &FilesCommands, format: OutputFormat) -> Re
             Ok(())
         }
 
-        FilesCommands::Upload { dest, file, resumable, chunk_size } => {
-            let result = mog_files::upload_file(
-                &client,
-                dest,
-                file,
-                *resumable,
-                *chunk_size,
-            ).await?;
+        FilesCommands::Upload {
+            dest,
+            file,
+            resumable,
+            chunk_size,
+        } => {
+            let result =
+                mog_files::upload_file(&client, dest, file, *resumable, *chunk_size).await?;
             eprintln!("Upload complete.");
             OutputRenderer::render_value(format, &result)?;
             Ok(())

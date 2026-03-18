@@ -1,9 +1,13 @@
 pub mod auth;
 pub mod calendar;
 pub mod config;
+pub mod contacts;
+pub mod directory;
 pub mod files;
 pub mod graph;
 pub mod mail;
+pub mod people;
+pub mod tasks;
 
 use mog_auth::profiles::ProfileStore;
 use mog_auth::token::TokenCache;
@@ -24,11 +28,12 @@ pub fn build_graph_client(
     let profile = store.get_profile(&profile_name)?;
 
     // Get cached tokens
-    let tokens = cache.get(&profile_name)
-        .ok_or_else(|| MogError::Auth(format!(
+    let tokens = cache.get(&profile_name).ok_or_else(|| {
+        MogError::Auth(format!(
             "No valid tokens for profile '{}'. Run: mog auth login --profile {}",
             profile_name, profile_name
-        )))?;
+        ))
+    })?;
 
     let access_token = tokens.access_token.clone();
     let _cloud = profile.cloud;
@@ -42,6 +47,10 @@ pub fn build_graph_client(
         api_version,
         config.graph.max_retries,
         top.unwrap_or(config.graph.max_results),
+        config.graph.max_all_results,
+        config.graph.timeout_seconds,
+        config.graph.connect_timeout_seconds,
+        config.graph.upload_timeout_seconds,
         trace,
     )
 }

@@ -7,6 +7,9 @@ edition.workspace = true
 name = "mog"
 path = "src/main.rs"
 
+[lints]
+workspace = true
+
 [dependencies]
 mog-core = { workspace = true }
 mog-graph = { workspace = true }
@@ -14,6 +17,10 @@ mog-auth = { workspace = true }
 mog-mail = { workspace = true }
 mog-calendar = { workspace = true }
 mog-files = { workspace = true }
+mog-contacts = { workspace = true }
+mog-people = { workspace = true }
+mog-tasks = { workspace = true }
+mog-directory = { workspace = true }
 clap = { workspace = true }
 clap_complete = { workspace = true }
 tokio = { workspace = true }
@@ -21,7 +28,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
 chrono = { workspace = true }
-atty = { workspace = true }
 tracing = { workspace = true }
+zeroize = { workspace = true }
 tracing-subscriber = { workspace = true }
 reqwest = { workspace = true }

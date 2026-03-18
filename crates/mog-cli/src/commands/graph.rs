@@ -8,7 +8,15 @@ use std::io::Read;
 
 pub async fn run(cli: &Cli, command: &GraphCommands, format: OutputFormat) -> Result<(), MogError> {
     match command {
-        GraphCommands::Call { verb, path, select, filter, header, body_file, body_stdin } => {
+        GraphCommands::Call {
+            verb,
+            path,
+            select,
+            filter,
+            header,
+            body_file,
+            body_stdin,
+        } => {
             let client = super::build_graph_client(
                 cli.profile.as_deref(),
                 &cli.api_version,
@@ -17,7 +25,9 @@ pub async fn run(cli: &Cli, command: &GraphCommands, format: OutputFormat) -> Re
             )?;
 
             // Parse HTTP method
-            let method = verb.to_uppercase().parse::<Method>()
+            let method = verb
+                .to_uppercase()
+                .parse::<Method>()
                 .map_err(|_| MogError::Validation(format!("Invalid HTTP method: {}", verb)))?;
 
             // Build query params
@@ -39,27 +49,33 @@ pub async fn run(cli: &Cli, command: &GraphCommands, format: OutputFormat) -> Re
                     headers.insert(key.trim().to_string(), value.trim().to_string());
                 } else {
                     return Err(MogError::Validation(format!(
-                        "Invalid header format '{}'. Expected 'Key: Value'", h
+                        "Invalid header format '{}'. Expected 'Key: Value'",
+                        h
                     )));
                 }
             }
 
             // Read body
             let body = if let Some(file) = body_file {
-                let content = std::fs::read_to_string(file)
-                    .map_err(|e| MogError::General(format!("Failed to read body file '{}': {}", file, e)))?;
-                let parsed: serde_json::Value = serde_json::from_str(&content)
-                    .map_err(|e| MogError::Validation(format!("Invalid JSON in body file: {}", e)))?;
+                let content = std::fs::read_to_string(file).map_err(|e| {
+                    MogError::General(format!("Failed to read body file '{}': {}", file, e))
+                })?;
+                let parsed: serde_json::Value = serde_json::from_str(&content).map_err(|e| {
+                    MogError::Validation(format!("Invalid JSON in body file: {}", e))
+                })?;
                 Some(parsed)
             } else if *body_stdin {
                 let mut content = String::new();
-                std::io::stdin().read_to_string(&mut content)
+                std::io::stdin()
+                    .read_to_string(&mut content)
                     .map_err(|e| MogError::General(format!("Failed to read from stdin: {}", e)))?;
                 if content.trim().is_empty() {
                     None
                 } else {
-                    let parsed: serde_json::Value = serde_json::from_str(&content)
-                        .map_err(|e| MogError::Validation(format!("Invalid JSON from stdin: {}", e)))?;
+                    let parsed: serde_json::Value =
+                        serde_json::from_str(&content).map_err(|e| {
+                            MogError::Validation(format!("Invalid JSON from stdin: {}", e))
+                        })?;
                     Some(parsed)
                 }
             } else {
@@ -75,12 +91,7 @@ pub async fn run(cli: &Cli, command: &GraphCommands, format: OutputFormat) -> Re
 
             // For GET with collections, use pagination-aware method
             if method == Method::GET && cli.all {
-                let results = client.get_collection(
-                    path,
-                    &options,
-                    cli.top,
-                    true,
-                ).await?;
+                let results = client.get_collection(path, &options, cli.top, true).await?;
                 OutputRenderer::render_value(format, &serde_json::Value::Array(results))?;
             } else {
                 let result = client.request(method, path, &options).await?;

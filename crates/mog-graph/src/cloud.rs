@@ -60,7 +60,10 @@ impl std::str::FromStr for Cloud {
             "gcc-high" | "gcchigh" => Ok(Cloud::GccHigh),
             "dod" => Ok(Cloud::Dod),
             "china" => Ok(Cloud::China),
-            _ => Err(format!("Unknown cloud: {}. Valid: public, gcc, gcc-high, dod, china", s)),
+            _ => Err(format!(
+                "Unknown cloud: {}. Valid: public, gcc, gcc-high, dod, china",
+                s
+            )),
         }
     }
 }

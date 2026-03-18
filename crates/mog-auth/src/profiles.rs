@@ -127,7 +127,17 @@ impl ProfileStore {
         let path = self.profiles_path();
         if path.exists() {
             match std::fs::read_to_string(&path) {
-                Ok(content) => serde_json::from_str(&content).unwrap_or_default(),
+                Ok(content) => match serde_json::from_str(&content) {
+                    Ok(parsed) => parsed,
+                    Err(e) => {
+                        tracing::warn!(
+                            path = %path.display(),
+                            error = %e,
+                            "Failed to parse profiles file, using defaults"
+                        );
+                        ProfileStoreData::default()
+                    }
+                },
                 Err(_) => ProfileStoreData::default(),
             }
         } else {
@@ -151,20 +161,23 @@ impl ProfileStore {
             return Ok(env_profile);
         }
         let data = self.load();
-        data.default_profile
-            .ok_or_else(|| MogError::Config(
-                "No profile specified. Use --profile, MOG_PROFILE env, or set a default profile.".into()
-            ))
+        data.default_profile.ok_or_else(|| {
+            MogError::Config(
+                "No profile specified. Use --profile, MOG_PROFILE env, or set a default profile."
+                    .into(),
+            )
+        })
     }
 
     /// Get a specific profile
     pub fn get_profile(&self, name: &str) -> Result<Profile, MogError> {
         let data = self.load();
-        data.profiles.get(name)
-            .cloned()
-            .ok_or_else(|| MogError::Config(format!(
-                "Profile '{}' not found. Run 'mog auth profile list' to see available profiles.", name
-            )))
+        data.profiles.get(name).cloned().ok_or_else(|| {
+            MogError::Config(format!(
+                "Profile '{}' not found. Run 'mog auth profile list' to see available profiles.",
+                name
+            ))
+        })
     }
 
     /// Create or update a profile
@@ -225,13 +238,22 @@ mod tests {
     fn test_auth_strategy_display() {
         assert_eq!(AuthStrategy::DeviceCode.to_string(), "device-code");
         assert_eq!(AuthStrategy::Browser.to_string(), "browser");
-        assert_eq!(AuthStrategy::ClientCredentials.to_string(), "client-credentials");
+        assert_eq!(
+            AuthStrategy::ClientCredentials.to_string(),
+            "client-credentials"
+        );
     }
 
     #[test]
     fn test_auth_strategy_from_str() {
-        assert_eq!("device-code".parse::<AuthStrategy>().unwrap(), AuthStrategy::DeviceCode);
-        assert_eq!("browser".parse::<AuthStrategy>().unwrap(), AuthStrategy::Browser);
+        assert_eq!(
+            "device-code".parse::<AuthStrategy>().unwrap(),
+            AuthStrategy::DeviceCode
+        );
+        assert_eq!(
+            "browser".parse::<AuthStrategy>().unwrap(),
+            AuthStrategy::Browser
+        );
         assert!("invalid".parse::<AuthStrategy>().is_err());
     }
 

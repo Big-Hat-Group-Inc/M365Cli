@@ -76,6 +76,20 @@ pub struct GraphConfig {
     pub auto_paginate: bool,
     #[serde(rename = "maxResults", default = "default_max_results")]
     pub max_results: u32,
+    #[serde(rename = "maxAllResults", default = "default_max_all_results")]
+    pub max_all_results: u32,
+    #[serde(rename = "timeoutSeconds", default = "default_timeout_seconds")]
+    pub timeout_seconds: u64,
+    #[serde(
+        rename = "connectTimeoutSeconds",
+        default = "default_connect_timeout_seconds"
+    )]
+    pub connect_timeout_seconds: u64,
+    #[serde(
+        rename = "uploadTimeoutSeconds",
+        default = "default_upload_timeout_seconds"
+    )]
+    pub upload_timeout_seconds: u64,
     #[serde(rename = "batchSize", default = "default_batch_size")]
     pub batch_size: u32,
 }
@@ -95,6 +109,19 @@ fn default_true() -> bool {
 fn default_max_results() -> u32 {
     100
 }
+
+fn default_max_all_results() -> u32 {
+    10_000
+}
+fn default_timeout_seconds() -> u64 {
+    30
+}
+fn default_connect_timeout_seconds() -> u64 {
+    10
+}
+fn default_upload_timeout_seconds() -> u64 {
+    300
+}
 fn default_batch_size() -> u32 {
     20
 }
@@ -107,6 +134,10 @@ impl Default for GraphConfig {
             default_page_size: default_page_size(),
             auto_paginate: default_true(),
             max_results: default_max_results(),
+            max_all_results: default_max_all_results(),
+            timeout_seconds: default_timeout_seconds(),
+            connect_timeout_seconds: default_connect_timeout_seconds(),
+            upload_timeout_seconds: default_upload_timeout_seconds(),
             batch_size: default_batch_size(),
         }
     }
@@ -161,7 +192,17 @@ impl ConfigStore {
         let path = self.config_path();
         if path.exists() {
             match std::fs::read_to_string(&path) {
-                Ok(content) => serde_json::from_str(&content).unwrap_or_default(),
+                Ok(content) => match serde_json::from_str(&content) {
+                    Ok(config) => config,
+                    Err(e) => {
+                        tracing::warn!(
+                            path = %path.display(),
+                            error = %e,
+                            "Failed to parse config file, using defaults"
+                        );
+                        GlobalConfig::default()
+                    }
+                },
                 Err(_) => GlobalConfig::default(),
             }
         } else {

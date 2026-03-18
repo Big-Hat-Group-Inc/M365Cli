@@ -3,6 +3,9 @@ name = "mog-mail"
 version.workspace = true
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 mog-core = { workspace = true }
 mog-graph = { workspace = true }

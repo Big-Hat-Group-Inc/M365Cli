@@ -7,6 +7,10 @@ members = [
     "crates/mog-mail",
     "crates/mog-calendar",
     "crates/mog-files",
+    "crates/mog-contacts",
+    "crates/mog-people",
+    "crates/mog-tasks",
+    "crates/mog-directory",
 ]
 resolver = "2"
 
@@ -38,9 +42,8 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 zeroize = { version = "1", features = ["derive"] }
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
 sha2 = "0.10"
-aes-gcm = "0.10"
-oauth2 = "5.0.0-rc.1"
-atty = "0.2"
+percent-encoding = "2"
+fs2 = "0.4"
 
 # Workspace crates
 mog-core = { path = "crates/mog-core" }
@@ -49,3 +52,13 @@ mog-auth = { path = "crates/mog-auth" }
 mog-mail = { path = "crates/mog-mail" }
 mog-calendar = { path = "crates/mog-calendar" }
 mog-files = { path = "crates/mog-files" }
+mog-contacts = { path = "crates/mog-contacts" }
+mog-people = { path = "crates/mog-people" }
+mog-tasks = { path = "crates/mog-tasks" }
+mog-directory = { path = "crates/mog-directory" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+too_many_arguments = "allow"

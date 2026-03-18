@@ -3,6 +3,9 @@ name = "mog-auth"
 version.workspace = true
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 mog-core = { workspace = true }
 mog-graph = { workspace = true }
@@ -20,3 +23,5 @@ zeroize = { workspace = true }
 tracing = { workspace = true }
 sha2 = { workspace = true }
 rand = { workspace = true }
+fs2 = { workspace = true }
+percent-encoding = { workspace = true }

@@ -1,3 +1,8 @@
+//! Microsoft 365 mail operations.
+//!
+//! List, search, read, and send messages via Microsoft Graph. Supports
+//! attachment listing, downloading, and inline file attachments when sending.
+
 use mog_core::error::MogError;
 use mog_graph::client::{GraphClient, RequestOptions};
 use reqwest::Method;
@@ -58,7 +63,9 @@ pub async fn list_messages(
         ..Default::default()
     };
 
-    client.get_collection("me/messages", &options, top, all).await
+    client
+        .get_collection("me/messages", &options, top, all)
+        .await
 }
 
 /// Search mail using KQL
@@ -71,7 +78,8 @@ pub async fn search_messages(
     params.insert("$search".to_string(), format!("\"{}\"", kql));
     params.insert(
         "$select".to_string(),
-        "id,subject,from,toRecipients,receivedDateTime,bodyPreview,isRead,hasAttachments".to_string(),
+        "id,subject,from,toRecipients,receivedDateTime,bodyPreview,isRead,hasAttachments"
+            .to_string(),
     );
 
     let options = RequestOptions {
@@ -79,7 +87,9 @@ pub async fn search_messages(
         ..Default::default()
     };
 
-    client.get_collection("me/messages", &options, top, false).await
+    client
+        .get_collection("me/messages", &options, top, false)
+        .await
 }
 
 /// Read a full message by ID
@@ -101,7 +111,13 @@ pub async fn read_message(
         ..Default::default()
     };
 
-    client.request(Method::GET, &format!("me/messages/{}", message_id), &options).await
+    client
+        .request(
+            Method::GET,
+            &format!("me/messages/{}", message_id),
+            &options,
+        )
+        .await
 }
 
 /// Send a mail message
@@ -112,13 +128,16 @@ pub async fn send_message(
     body_content: &str,
     attachments: &[String],
 ) -> Result<Value, MogError> {
-    let to_recipients: Vec<Value> = to.iter().map(|addr| {
-        json!({
-            "emailAddress": {
-                "address": addr
-            }
+    let to_recipients: Vec<Value> = to
+        .iter()
+        .map(|addr| {
+            json!({
+                "emailAddress": {
+                    "address": addr
+                }
+            })
         })
-    }).collect();
+        .collect();
 
     let mut message = json!({
         "subject": subject,
@@ -134,16 +153,16 @@ pub async fn send_message(
         let mut att_array = Vec::new();
         for path_str in attachments {
             let path = Path::new(path_str);
-            let filename = path.file_name()
+            let filename = path
+                .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("attachment")
                 .to_string();
-            let content = std::fs::read(path)
-                .map_err(|e| MogError::General(format!("Failed to read attachment '{}': {}", path_str, e)))?;
-            let content_b64 = base64::Engine::encode(
-                &base64::engine::general_purpose::STANDARD,
-                &content,
-            );
+            let content = tokio::fs::read(path).await.map_err(|e| {
+                MogError::General(format!("Failed to read attachment '{}': {}", path_str, e))
+            })?;
+            let content_b64 =
+                base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &content);
             let content_type = guess_content_type(&filename);
             att_array.push(json!({
                 "@odata.type": "#microsoft.graph.fileAttachment",
@@ -165,7 +184,9 @@ pub async fn send_message(
         ..Default::default()
     };
 
-    client.request(Method::POST, "me/sendMail", &options).await?;
+    client
+        .request(Method::POST, "me/sendMail", &options)
+        .await?;
     Ok(json!({"status": "sent"}))
 }
 
@@ -175,19 +196,24 @@ pub async fn list_attachments(
     message_id: &str,
 ) -> Result<Vec<Value>, MogError> {
     let mut params = HashMap::new();
-    params.insert("$select".to_string(), "id,name,contentType,size".to_string());
+    params.insert(
+        "$select".to_string(),
+        "id,name,contentType,size".to_string(),
+    );
 
     let options = RequestOptions {
         query_params: params,
         ..Default::default()
     };
 
-    client.get_collection(
-        &format!("me/messages/{}/attachments", message_id),
-        &options,
-        None,
-        false,
-    ).await
+    client
+        .get_collection(
+            &format!("me/messages/{}/attachments", message_id),
+            &options,
+            None,
+            false,
+        )
+        .await
 }
 
 /// Download attachments for a message
@@ -205,13 +231,16 @@ pub async fn download_attachments(
     if let Some(att_id) = attachment_id {
         // Download specific attachment
         let path = format!("me/messages/{}/attachments/{}", message_id, att_id);
-        let att = client.request(Method::GET, &path, &RequestOptions::default()).await?;
+        let att = client
+            .request(Method::GET, &path, &RequestOptions::default())
+            .await?;
         if let Some(name) = att.get("name").and_then(|v| v.as_str()) {
             if let Some(bytes) = att.get("contentBytes").and_then(|v| v.as_str()) {
-                let decoded = base64::Engine::decode(
-                    &base64::engine::general_purpose::STANDARD,
-                    bytes,
-                ).map_err(|e| MogError::General(format!("Failed to decode attachment: {}", e)))?;
+                let decoded =
+                    base64::Engine::decode(&base64::engine::general_purpose::STANDARD, bytes)
+                        .map_err(|e| {
+                            MogError::General(format!("Failed to decode attachment: {}", e))
+                        })?;
                 let file_path = dir.join(name);
                 std::fs::write(&file_path, &decoded)?;
                 downloaded.push(file_path.to_string_lossy().to_string());
@@ -223,13 +252,18 @@ pub async fn download_attachments(
         for att in &attachments {
             if let Some(att_id) = att.get("id").and_then(|v| v.as_str()) {
                 let path = format!("me/messages/{}/attachments/{}", message_id, att_id);
-                let full_att = client.request(Method::GET, &path, &RequestOptions::default()).await?;
+                let full_att = client
+                    .request(Method::GET, &path, &RequestOptions::default())
+                    .await?;
                 if let Some(name) = full_att.get("name").and_then(|v| v.as_str()) {
                     if let Some(bytes) = full_att.get("contentBytes").and_then(|v| v.as_str()) {
                         let decoded = base64::Engine::decode(
                             &base64::engine::general_purpose::STANDARD,
                             bytes,
-                        ).map_err(|e| MogError::General(format!("Failed to decode attachment: {}", e)))?;
+                        )
+                        .map_err(|e| {
+                            MogError::General(format!("Failed to decode attachment: {}", e))
+                        })?;
                         let file_path = dir.join(name);
                         std::fs::write(&file_path, &decoded)?;
                         downloaded.push(file_path.to_string_lossy().to_string());
@@ -265,7 +299,9 @@ fn guess_content_type(filename: &str) -> &'static str {
         "pdf" => "application/pdf",
         "doc" | "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "xls" | "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "ppt" | "pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "ppt" | "pptx" => {
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        }
         "txt" => "text/plain",
         "html" | "htm" => "text/html",
         "png" => "image/png",
@@ -299,7 +335,10 @@ mod tests {
     fn test_guess_content_type() {
         assert_eq!(guess_content_type("test.pdf"), "application/pdf");
         assert_eq!(guess_content_type("test.txt"), "text/plain");
-        assert_eq!(guess_content_type("unknown.xyz"), "application/octet-stream");
+        assert_eq!(
+            guess_content_type("unknown.xyz"),
+            "application/octet-stream"
+        );
         assert_eq!(guess_content_type("image.png"), "image/png");
         assert_eq!(guess_content_type("photo.jpg"), "image/jpeg");
         assert_eq!(guess_content_type("data.csv"), "text/csv");
@@ -308,8 +347,10 @@ mod tests {
     #[test]
     fn test_select_fields_list_vs_read() {
         // List should NOT include body, read does
-        let list_select = "id,subject,from,toRecipients,receivedDateTime,bodyPreview,isRead,hasAttachments";
-        let read_select = "id,subject,from,toRecipients,receivedDateTime,bodyPreview,isRead,body,hasAttachments";
+        let list_select =
+            "id,subject,from,toRecipients,receivedDateTime,bodyPreview,isRead,hasAttachments";
+        let read_select =
+            "id,subject,from,toRecipients,receivedDateTime,bodyPreview,isRead,body,hasAttachments";
         assert!(!list_select.contains("body,"));
         assert!(read_select.contains("body,"));
     }

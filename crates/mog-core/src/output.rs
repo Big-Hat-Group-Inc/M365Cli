@@ -1,7 +1,7 @@
-use comfy_table::{Table, presets::UTF8_FULL, modifiers::UTF8_ROUND_CORNERS, ContentArrangement};
+use comfy_table::{modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, ContentArrangement, Table};
 use serde::Serialize;
 use serde_json::Value;
-use std::io::Write;
+use std::io::{IsTerminal, Write};
 
 /// Output format selection
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -30,7 +30,7 @@ impl OutputFormat {
             };
         }
         // Default: table if TTY, json otherwise
-        if atty::is(atty::Stream::Stdout) {
+        if std::io::stdout().is_terminal() {
             OutputFormat::Table
         } else {
             OutputFormat::Json
@@ -43,7 +43,10 @@ pub struct OutputRenderer;
 
 impl OutputRenderer {
     /// Render a serializable value
-    pub fn render<T: Serialize>(format: OutputFormat, data: &T) -> Result<(), crate::error::MogError> {
+    pub fn render<T: Serialize>(
+        format: OutputFormat,
+        data: &T,
+    ) -> Result<(), crate::error::MogError> {
         let value = serde_json::to_value(data)?;
         match format {
             OutputFormat::Json => Self::render_json(&value),
@@ -87,14 +90,15 @@ impl OutputRenderer {
 
                     for item in items {
                         if let Value::Object(obj) = item {
-                            let row: Vec<String> = headers.iter().map(|h| {
-                                match obj.get(h) {
+                            let row: Vec<String> = headers
+                                .iter()
+                                .map(|h| match obj.get(h) {
                                     Some(Value::String(s)) => s.clone(),
                                     Some(Value::Null) => String::new(),
                                     Some(v) => v.to_string(),
                                     None => String::new(),
-                                }
-                            }).collect();
+                                })
+                                .collect();
                             table.add_row(row);
                         }
                     }
@@ -136,13 +140,14 @@ impl OutputRenderer {
             Value::Array(items) => {
                 for item in items {
                     if let Value::Object(obj) = item {
-                        let parts: Vec<String> = obj.values().map(|v| {
-                            match v {
+                        let parts: Vec<String> = obj
+                            .values()
+                            .map(|v| match v {
                                 Value::String(s) => s.clone(),
                                 Value::Null => String::new(),
                                 _ => v.to_string(),
-                            }
-                        }).collect();
+                            })
+                            .collect();
                         println!("{}", parts.join("\t"));
                     } else {
                         println!("{}", format_plain_value(item));
@@ -165,18 +170,26 @@ impl OutputRenderer {
         if let Value::Array(items) = value {
             if let Some(Value::Object(first)) = items.first() {
                 let headers: Vec<&String> = first.keys().collect();
-                println!("{}", headers.iter().map(|h| csv_escape(h)).collect::<Vec<_>>().join(","));
+                println!(
+                    "{}",
+                    headers
+                        .iter()
+                        .map(|h| csv_escape(h))
+                        .collect::<Vec<_>>()
+                        .join(",")
+                );
 
                 for item in items {
                     if let Value::Object(obj) = item {
-                        let row: Vec<String> = headers.iter().map(|h| {
-                            match obj.get(*h) {
+                        let row: Vec<String> = headers
+                            .iter()
+                            .map(|h| match obj.get(*h) {
                                 Some(Value::String(s)) => csv_escape(s),
                                 Some(Value::Null) => String::new(),
                                 Some(v) => csv_escape(&v.to_string()),
                                 None => String::new(),
-                            }
-                        }).collect();
+                            })
+                            .collect();
                         println!("{}", row.join(","));
                     }
                 }
@@ -220,10 +233,22 @@ mod tests {
 
     #[test]
     fn test_output_format_from_flags() {
-        assert_eq!(OutputFormat::from_flags(true, false, None), OutputFormat::Json);
-        assert_eq!(OutputFormat::from_flags(false, true, None), OutputFormat::Plain);
-        assert_eq!(OutputFormat::from_flags(false, false, Some("csv")), OutputFormat::Csv);
-        assert_eq!(OutputFormat::from_flags(false, false, Some("json")), OutputFormat::Json);
+        assert_eq!(
+            OutputFormat::from_flags(true, false, None),
+            OutputFormat::Json
+        );
+        assert_eq!(
+            OutputFormat::from_flags(false, true, None),
+            OutputFormat::Plain
+        );
+        assert_eq!(
+            OutputFormat::from_flags(false, false, Some("csv")),
+            OutputFormat::Csv
+        );
+        assert_eq!(
+            OutputFormat::from_flags(false, false, Some("json")),
+            OutputFormat::Json
+        );
     }
 
     #[test]
@@ -235,15 +260,27 @@ mod tests {
 
     #[test]
     fn test_output_format_unknown_string() {
-        assert_eq!(OutputFormat::from_flags(false, false, Some("xml")), OutputFormat::Table);
-        assert_eq!(OutputFormat::from_flags(false, false, Some("TABLE")), OutputFormat::Table);
-        assert_eq!(OutputFormat::from_flags(false, false, Some("text")), OutputFormat::Plain);
+        assert_eq!(
+            OutputFormat::from_flags(false, false, Some("xml")),
+            OutputFormat::Table
+        );
+        assert_eq!(
+            OutputFormat::from_flags(false, false, Some("TABLE")),
+            OutputFormat::Table
+        );
+        assert_eq!(
+            OutputFormat::from_flags(false, false, Some("text")),
+            OutputFormat::Plain
+        );
     }
 
     #[test]
     fn test_json_flag_takes_priority() {
         // json flag wins even if plain is also set
-        assert_eq!(OutputFormat::from_flags(true, true, Some("csv")), OutputFormat::Json);
+        assert_eq!(
+            OutputFormat::from_flags(true, true, Some("csv")),
+            OutputFormat::Json
+        );
     }
 
     #[test]

@@ -83,17 +83,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
-name = "atty"
-version = "0.2.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9b39be18770d11421cdb1b9947a45dd3f37e93092cbf377614828a319d5fee8"
-dependencies = [
- "hermit-abi",
- "libc",
- "winapi",
-]
-
-[[package]]
 name = "autocfg"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -371,6 +360,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fs2"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9564fc758e15025b46aa6643b1b77d047d1a56a1aea6e01002ac0c7026876213"
+dependencies = [
+ "libc",
+ "winapi",
+]
+
+[[package]]
 name = "futures-channel"
 version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -500,15 +499,6 @@ name = "heck"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
-
-[[package]]
-name = "hermit-abi"
-version = "0.1.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62b467343b94ba476dcb2500d242dadbb39557df889310ac77c5d99100aaac33"
-dependencies = [
- "libc",
-]
 
 [[package]]
 name = "http"
@@ -891,8 +881,10 @@ dependencies = [
  "anyhow",
  "base64",
  "chrono",
+ "fs2",
  "mog-core",
  "mog-graph",
+ "percent-encoding",
  "rand 0.8.5",
  "reqwest",
  "serde",
@@ -925,22 +917,37 @@ name = "mog-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "atty",
  "chrono",
  "clap",
  "clap_complete",
  "mog-auth",
  "mog-calendar",
+ "mog-contacts",
  "mog-core",
+ "mog-directory",
  "mog-files",
  "mog-graph",
  "mog-mail",
+ "mog-people",
+ "mog-tasks",
  "reqwest",
  "serde",
  "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "zeroize",
+]
+
+[[package]]
+name = "mog-contacts"
+version = "0.1.0"
+dependencies = [
+ "mog-core",
+ "mog-graph",
+ "reqwest",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -948,7 +955,6 @@ name = "mog-core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "atty",
  "chrono",
  "comfy-table",
  "dirs",
@@ -959,12 +965,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "mog-directory"
+version = "0.1.0"
+dependencies = [
+ "mog-core",
+ "mog-graph",
+ "reqwest",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "mog-files"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "mog-core",
  "mog-graph",
+ "percent-encoding",
  "reqwest",
  "serde",
  "serde_json",
@@ -1003,6 +1021,29 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "mog-people"
+version = "0.1.0"
+dependencies = [
+ "mog-core",
+ "mog-graph",
+ "reqwest",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "mog-tasks"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "mog-core",
+ "mog-graph",
+ "reqwest",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

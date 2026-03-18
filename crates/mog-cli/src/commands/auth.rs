@@ -8,6 +8,7 @@ use mog_core::output::{OutputFormat, OutputRenderer};
 use mog_graph::cloud::Cloud;
 use serde_json::json;
 use std::io::Read;
+use zeroize::Zeroizing;
 
 pub async fn run(cli: &Cli, command: &AuthCommands, format: OutputFormat) -> Result<(), MogError> {
     match command {
@@ -34,7 +35,8 @@ pub async fn run(cli: &Cli, command: &AuthCommands, format: OutputFormat) -> Res
                 Err(_) => {
                     let tenant = cli.tenant.as_deref().unwrap_or("common");
                     let client = cli.client_id.as_deref().unwrap_or(DEFAULT_CLIENT_ID);
-                    let strat = strategy.as_deref()
+                    let strat = strategy
+                        .as_deref()
                         .unwrap_or("device-code")
                         .parse::<AuthStrategy>()
                         .map_err(MogError::Validation)?;
@@ -70,8 +72,7 @@ pub async fn run(cli: &Cli, command: &AuthCommands, format: OutputFormat) -> Res
 
             // Determine auth strategy
             let effective_strategy = if let Some(s) = strategy {
-                s.parse::<AuthStrategy>()
-                    .map_err(MogError::Validation)?
+                s.parse::<AuthStrategy>().map_err(MogError::Validation)?
             } else {
                 profile.auth_strategy.clone()
             };
@@ -84,19 +85,22 @@ pub async fn run(cli: &Cli, command: &AuthCommands, format: OutputFormat) -> Res
                             &profile.tenant_id,
                             token_file,
                             profile.cloud,
-                        ).await?
+                        )
+                        .await?
                     } else if *client_secret_stdin {
                         eprintln!("Reading client secret from stdin...");
-                        let mut secret = String::new();
-                        std::io::stdin().read_to_string(&mut secret)
-                            .map_err(|e| MogError::Auth(format!("Failed to read secret from stdin: {}", e)))?;
-                        let secret = secret.trim().to_string();
+                        let mut raw = String::new();
+                        std::io::stdin().read_to_string(&mut raw).map_err(|e| {
+                            MogError::Auth(format!("Failed to read secret from stdin: {}", e))
+                        })?;
+                        let secret = Zeroizing::new(raw.trim().to_string());
                         flows::client_credentials_flow(
                             &profile.client_id,
                             &profile.tenant_id,
                             &secret,
                             profile.cloud,
-                        ).await?
+                        )
+                        .await?
                     } else {
                         return Err(MogError::Validation(
                             "App auth requires --certificate-file, --client-secret-stdin, or --federated-token-file".into()
@@ -104,20 +108,21 @@ pub async fn run(cli: &Cli, command: &AuthCommands, format: OutputFormat) -> Res
                     }
                 }
                 "managed-identity" => {
-                    flows::managed_identity_flow(
-                        cli.client_id.as_deref(),
-                        profile.cloud,
-                    ).await?
+                    flows::managed_identity_flow(cli.client_id.as_deref(), profile.cloud).await?
                 }
                 "federated" => {
-                    let token_file = federated_token_file.as_deref()
-                        .ok_or_else(|| MogError::Validation("--federated-token-file is required for federated auth".into()))?;
+                    let token_file = federated_token_file.as_deref().ok_or_else(|| {
+                        MogError::Validation(
+                            "--federated-token-file is required for federated auth".into(),
+                        )
+                    })?;
                     flows::federated_identity_flow(
                         &profile.client_id,
                         &profile.tenant_id,
                         token_file,
                         profile.cloud,
-                    ).await?
+                    )
+                    .await?
                 }
                 _ => {
                     // Delegated (user) auth
@@ -128,7 +133,8 @@ pub async fn run(cli: &Cli, command: &AuthCommands, format: OutputFormat) -> Res
                                 &profile.tenant_id,
                                 &scopes,
                                 profile.cloud,
-                            ).await?
+                            )
+                            .await?
                         }
                         AuthStrategy::Browser => {
                             // For MVP, redirect to device code with a note
@@ -138,11 +144,13 @@ pub async fn run(cli: &Cli, command: &AuthCommands, format: OutputFormat) -> Res
                                 &profile.tenant_id,
                                 &scopes,
                                 profile.cloud,
-                            ).await?
+                            )
+                            .await?
                         }
                         _ => {
                             return Err(MogError::Validation(format!(
-                                "Strategy '{}' requires --auth-type app or federated", effective_strategy
+                                "Strategy '{}' requires --auth-type app or federated",
+                                effective_strategy
                             )));
                         }
                     }
@@ -216,9 +224,7 @@ pub async fn run(cli: &Cli, command: &AuthCommands, format: OutputFormat) -> Res
             Ok(())
         }
 
-        AuthCommands::Profile { command } => {
-            run_profile_command(cli, command, format).await
-        }
+        AuthCommands::Profile { command } => run_profile_command(cli, command, format).await,
 
         AuthCommands::ExplainPermissions { command } => {
             let cmd_str = command.join(" ");
@@ -273,15 +279,18 @@ async fn run_profile_command(
     match command {
         ProfileCommands::List => {
             let profiles = store.list_profiles();
-            let items: Vec<serde_json::Value> = profiles.iter().map(|(name, profile, is_default)| {
-                json!({
-                    "name": name,
-                    "tenant": &profile.tenant_id,
-                    "cloud": profile.cloud.to_string(),
-                    "strategy": profile.auth_strategy.to_string(),
-                    "default": is_default,
+            let items: Vec<serde_json::Value> = profiles
+                .iter()
+                .map(|(name, profile, is_default)| {
+                    json!({
+                        "name": name,
+                        "tenant": &profile.tenant_id,
+                        "cloud": profile.cloud.to_string(),
+                        "strategy": profile.auth_strategy.to_string(),
+                        "default": is_default,
+                    })
                 })
-            }).collect();
+                .collect();
 
             if items.is_empty() {
                 eprintln!("No profiles configured. Run 'mog auth profile create' to create one.");
@@ -291,12 +300,19 @@ async fn run_profile_command(
             Ok(())
         }
 
-        ProfileCommands::Create { name, tenant, client_id, strategy, cloud, scopes } => {
+        ProfileCommands::Create {
+            name,
+            tenant,
+            client_id,
+            strategy,
+            cloud,
+            scopes,
+        } => {
             let client = client_id.as_deref().unwrap_or(DEFAULT_CLIENT_ID);
-            let strat = strategy.parse::<AuthStrategy>()
+            let strat = strategy
+                .parse::<AuthStrategy>()
                 .map_err(MogError::Validation)?;
-            let cloud_env = cloud.parse::<Cloud>()
-                .map_err(MogError::Validation)?;
+            let cloud_env = cloud.parse::<Cloud>().map_err(MogError::Validation)?;
 
             let profile = Profile {
                 tenant_id: tenant.clone(),
@@ -314,7 +330,13 @@ async fn run_profile_command(
             Ok(())
         }
 
-        ProfileCommands::Update { name, tenant, client_id, strategy, cloud } => {
+        ProfileCommands::Update {
+            name,
+            tenant,
+            client_id,
+            strategy,
+            cloud,
+        } => {
             let mut profile = store.get_profile(name)?;
             if let Some(t) = tenant {
                 profile.tenant_id = t.clone();
@@ -323,12 +345,10 @@ async fn run_profile_command(
                 profile.client_id = c.clone();
             }
             if let Some(s) = strategy {
-                profile.auth_strategy = s.parse::<AuthStrategy>()
-                    .map_err(MogError::Validation)?;
+                profile.auth_strategy = s.parse::<AuthStrategy>().map_err(MogError::Validation)?;
             }
             if let Some(c) = cloud {
-                profile.cloud = c.parse::<Cloud>()
-                    .map_err(MogError::Validation)?;
+                profile.cloud = c.parse::<Cloud>().map_err(MogError::Validation)?;
             }
             store.upsert_profile(name, profile)?;
             eprintln!("Profile '{}' updated.", name);

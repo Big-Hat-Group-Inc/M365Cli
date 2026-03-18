@@ -52,7 +52,7 @@ pub struct Cli {
     pub trace: bool,
 
     /// Graph API version
-    #[arg(long, global = true, default_value = "v1.0", value_name = "VERSION")]
+    #[arg(long, global = true, default_value = "v1.0", value_name = "VERSION", value_parser = ["v1.0", "beta"])]
     pub api_version: String,
 
     /// Server-side $top parameter
@@ -104,6 +104,26 @@ pub enum Commands {
     Files {
         #[command(subcommand)]
         command: FilesCommands,
+    },
+    /// Contacts operations
+    Contacts {
+        #[command(subcommand)]
+        command: ContactsCommands,
+    },
+    /// People (relevance-ranked) operations
+    People {
+        #[command(subcommand)]
+        command: PeopleCommands,
+    },
+    /// Microsoft To Do tasks
+    Tasks {
+        #[command(subcommand)]
+        command: TasksCommands,
+    },
+    /// Directory (users and groups) operations
+    Directory {
+        #[command(subcommand)]
+        command: DirectoryCommands,
     },
     /// Raw Microsoft Graph API call
     Graph {
@@ -414,6 +434,172 @@ pub enum FilesCommands {
     },
 }
 
+// === Contacts Commands ===
+
+#[derive(Subcommand, Debug)]
+pub enum ContactsCommands {
+    /// List personal contacts
+    List {
+        /// OData $filter expression
+        #[arg(long)]
+        filter: Option<String>,
+    },
+    /// Search contacts
+    Search {
+        /// Search query
+        #[arg(long, required = true)]
+        query: String,
+    },
+    /// Read a single contact
+    Read {
+        /// Contact ID
+        id: String,
+    },
+}
+
+// === People Commands ===
+
+#[derive(Subcommand, Debug)]
+pub enum PeopleCommands {
+    /// Show relevance-ranked people
+    Relevant,
+    /// Search people
+    Search {
+        /// Search query
+        #[arg(long, required = true)]
+        query: String,
+    },
+}
+
+// === Tasks Commands ===
+
+#[derive(Subcommand, Debug)]
+pub enum TasksCommands {
+    /// List To Do task lists
+    Lists,
+    /// List tasks in a task list
+    List {
+        /// Task list ID
+        #[arg(long, required = true)]
+        list_id: String,
+        /// Filter by status (e.g., notStarted, inProgress, completed)
+        #[arg(long)]
+        status: Option<String>,
+    },
+    /// Create a new task
+    Create {
+        /// Task list ID
+        #[arg(long, required = true)]
+        list_id: String,
+        /// Task title
+        #[arg(long, required = true)]
+        title: String,
+        /// Task body content
+        #[arg(long)]
+        body: Option<String>,
+        /// Due date (YYYY-MM-DD or ISO 8601)
+        #[arg(long)]
+        due: Option<String>,
+    },
+    /// Update an existing task
+    Update {
+        /// Task list ID
+        #[arg(long, required = true)]
+        list_id: String,
+        /// Task ID
+        #[arg(long, required = true)]
+        task_id: String,
+        /// New title
+        #[arg(long)]
+        title: Option<String>,
+        /// New importance (low, normal, high)
+        #[arg(long)]
+        importance: Option<String>,
+    },
+    /// Mark a task as completed
+    Complete {
+        /// Task list ID
+        #[arg(long, required = true)]
+        list_id: String,
+        /// Task ID
+        #[arg(long, required = true)]
+        task_id: String,
+    },
+    /// Delete a task
+    Delete {
+        /// Task list ID
+        #[arg(long, required = true)]
+        list_id: String,
+        /// Task ID
+        #[arg(long, required = true)]
+        task_id: String,
+    },
+}
+
+// === Directory Commands ===
+
+#[derive(Subcommand, Debug)]
+pub enum DirectoryCommands {
+    /// User directory operations
+    Users {
+        #[command(subcommand)]
+        command: DirectoryUsersCommands,
+    },
+    /// Group directory operations
+    Groups {
+        #[command(subcommand)]
+        command: DirectoryGroupsCommands,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum DirectoryUsersCommands {
+    /// List users in the organization
+    List {
+        /// OData $filter expression
+        #[arg(long)]
+        filter: Option<String>,
+    },
+    /// Search users by display name
+    Search {
+        /// Search query
+        #[arg(long, required = true)]
+        query: String,
+    },
+    /// Read a single user by ID or UPN
+    Read {
+        /// User ID or UPN
+        id: String,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum DirectoryGroupsCommands {
+    /// List groups in the organization
+    List {
+        /// OData $filter expression
+        #[arg(long)]
+        filter: Option<String>,
+    },
+    /// Search groups by display name
+    Search {
+        /// Search query
+        #[arg(long, required = true)]
+        query: String,
+    },
+    /// Read a single group
+    Read {
+        /// Group ID
+        id: String,
+    },
+    /// List members of a group
+    Members {
+        /// Group ID
+        #[arg(long, required = true)]
+        group_id: String,
+    },
+}
+
 // === Graph Commands ===
 
 #[derive(Subcommand, Debug)]
@@ -473,7 +659,7 @@ async fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(log_level))
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(log_level)),
         )
         .with_writer(std::io::stderr)
         .init();
@@ -483,11 +669,7 @@ async fn main() {
         eprintln!("Warning: Using beta API. Endpoints may change without notice.");
     }
 
-    let format = OutputFormat::from_flags(
-        cli.json,
-        cli.plain,
-        cli.output.as_deref(),
-    );
+    let format = OutputFormat::from_flags(cli.json, cli.plain, cli.output.as_deref());
 
     let result = run_command(&cli, format).await;
 
@@ -522,6 +704,10 @@ async fn run_command(cli: &Cli, format: OutputFormat) -> Result<(), MogError> {
         Commands::Mail { command } => commands::mail::run(cli, command, format).await,
         Commands::Calendar { command } => commands::calendar::run(cli, command, format).await,
         Commands::Files { command } => commands::files::run(cli, command, format).await,
+        Commands::Contacts { command } => commands::contacts::run(cli, command, format).await,
+        Commands::People { command } => commands::people::run(cli, command, format).await,
+        Commands::Tasks { command } => commands::tasks::run(cli, command, format).await,
+        Commands::Directory { command } => commands::directory::run(cli, command, format).await,
         Commands::Graph { command } => commands::graph::run(cli, command, format).await,
     }
 }

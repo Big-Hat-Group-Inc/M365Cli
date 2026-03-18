@@ -113,12 +113,30 @@ mod tests {
 
     #[test]
     fn test_error_exit_code_mapping() {
-        assert_eq!(MogError::Auth("test".into()).exit_code(), ExitCode::AuthFailure);
-        assert_eq!(MogError::Authz("test".into()).exit_code(), ExitCode::AuthzFailure);
-        assert_eq!(MogError::NotFound("test".into()).exit_code(), ExitCode::NotFound);
-        assert_eq!(MogError::RateLimited("test".into()).exit_code(), ExitCode::RateLimited);
-        assert_eq!(MogError::Network("test".into()).exit_code(), ExitCode::NetworkError);
-        assert_eq!(MogError::Conflict("test".into()).exit_code(), ExitCode::Conflict);
+        assert_eq!(
+            MogError::Auth("test".into()).exit_code(),
+            ExitCode::AuthFailure
+        );
+        assert_eq!(
+            MogError::Authz("test".into()).exit_code(),
+            ExitCode::AuthzFailure
+        );
+        assert_eq!(
+            MogError::NotFound("test".into()).exit_code(),
+            ExitCode::NotFound
+        );
+        assert_eq!(
+            MogError::RateLimited("test".into()).exit_code(),
+            ExitCode::RateLimited
+        );
+        assert_eq!(
+            MogError::Network("test".into()).exit_code(),
+            ExitCode::NetworkError
+        );
+        assert_eq!(
+            MogError::Conflict("test".into()).exit_code(),
+            ExitCode::Conflict
+        );
         assert_eq!(MogError::UserCancelled.exit_code(), ExitCode::UserCancelled);
     }
 
@@ -132,9 +150,18 @@ mod tests {
 
     #[test]
     fn test_fallback_exit_codes() {
-        assert_eq!(MogError::NonInteractive("x".into()).exit_code(), ExitCode::GeneralError);
-        assert_eq!(MogError::Config("x".into()).exit_code(), ExitCode::GeneralError);
-        assert_eq!(MogError::Validation("x".into()).exit_code(), ExitCode::GeneralError);
+        assert_eq!(
+            MogError::NonInteractive("x".into()).exit_code(),
+            ExitCode::GeneralError
+        );
+        assert_eq!(
+            MogError::Config("x".into()).exit_code(),
+            ExitCode::GeneralError
+        );
+        assert_eq!(
+            MogError::Validation("x".into()).exit_code(),
+            ExitCode::GeneralError
+        );
     }
 
     #[test]

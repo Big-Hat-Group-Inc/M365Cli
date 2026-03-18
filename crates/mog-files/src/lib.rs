@@ -1,10 +1,56 @@
+//! OneDrive file operations.
+//!
+//! Search, download, export, and upload files to the user's OneDrive via
+//! Microsoft Graph. Supports simple uploads for small files and resumable
+//! upload sessions for large files with chunked transfer.
+
 use mog_core::error::MogError;
 use mog_graph::client::{GraphClient, RequestOptions};
 use mog_graph::upload::{self, UploadSession};
+use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use reqwest::Method;
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Component, Path};
+
+/// Validate destination path for OneDrive upload
+fn validate_dest_path(dest: &str) -> Result<(), MogError> {
+    if dest.is_empty() {
+        return Err(MogError::Validation(
+            "Destination path cannot be empty".into(),
+        ));
+    }
+
+    // Check for path traversal using component iteration.
+    // This catches `..`, `....//`, and encoded variants that resolve to ParentDir.
+    let normalized = dest.replace('\\', "/");
+    for component in Path::new(&normalized).components() {
+        if matches!(component, Component::ParentDir) {
+            return Err(MogError::Validation(
+                "Destination path cannot contain parent directory references ('..')".into(),
+            ));
+        }
+    }
+
+    // Check for characters that could break URL construction
+    for c in dest.chars() {
+        if c.is_control() {
+            return Err(MogError::Validation(
+                "Destination path contains control characters".into(),
+            ));
+        }
+        match c {
+            '?' | '#' | '&' | '%' | '\\' => {
+                return Err(MogError::Validation(
+                    format!("Destination path contains invalid character '{}'. Characters ?, #, &, %, and backslash are not allowed.", c)
+                ));
+            }
+            _ => continue,
+        }
+    }
+
+    Ok(())
+}
 
 /// Search drive files
 pub async fn search_files(
@@ -21,7 +67,8 @@ pub async fn search_files(
         "id,name,size,lastModifiedDateTime,webUrl,file,folder".to_string(),
     );
 
-    let path = format!("me/drive/root/search(q='{}')", query);
+    let encoded_query = utf8_percent_encode(query, NON_ALPHANUMERIC).to_string();
+    let path = format!("me/drive/root/search(q='{}')", encoded_query);
     let options = RequestOptions {
         query_params: params,
         ..Default::default()
@@ -37,13 +84,15 @@ pub async fn download_file(
     out_path: &str,
 ) -> Result<String, MogError> {
     let path = format!("me/drive/items/{}/content", item_id);
-    let bytes = client.request_bytes(Method::GET, &path, &RequestOptions::default()).await?;
+    let bytes = client
+        .request_bytes(Method::GET, &path, &RequestOptions::default())
+        .await?;
 
     let out = Path::new(out_path);
     if let Some(parent) = out.parent() {
-        std::fs::create_dir_all(parent)?;
+        tokio::fs::create_dir_all(parent).await?;
     }
-    std::fs::write(out, &bytes)?;
+    tokio::fs::write(out, &bytes).await?;
 
     Ok(out_path.to_string())
 }
@@ -55,14 +104,20 @@ pub async fn export_file(
     format: &str,
     out_path: &str,
 ) -> Result<String, MogError> {
-    let path = format!("me/drive/items/{}/content?format={}", item_id, format);
-    let bytes = client.request_bytes(Method::GET, &path, &RequestOptions::default()).await?;
+    let encoded_format = utf8_percent_encode(format, NON_ALPHANUMERIC).to_string();
+    let path = format!(
+        "me/drive/items/{}/content?format={}",
+        item_id, encoded_format
+    );
+    let bytes = client
+        .request_bytes(Method::GET, &path, &RequestOptions::default())
+        .await?;
 
     let out = Path::new(out_path);
     if let Some(parent) = out.parent() {
-        std::fs::create_dir_all(parent)?;
+        tokio::fs::create_dir_all(parent).await?;
     }
-    std::fs::write(out, &bytes)?;
+    tokio::fs::write(out, &bytes).await?;
 
     Ok(out_path.to_string())
 }
@@ -75,24 +130,24 @@ pub async fn upload_file(
     resumable: bool,
     chunk_size: Option<u64>,
 ) -> Result<Value, MogError> {
-    let file_data = std::fs::read(local_file)
+    validate_dest_path(dest)?;
+    let normalized_dest = dest.replace('\\', "/").trim_start_matches('/').to_string();
+
+    let file_data = tokio::fs::read(local_file)
+        .await
         .map_err(|e| MogError::General(format!("Failed to read file '{}': {}", local_file, e)))?;
     let file_size = file_data.len() as u64;
 
     // Use resumable upload for files > 4MB or when explicitly requested
     if resumable || file_size > 4 * 1024 * 1024 {
-        resumable_upload(client, dest, &file_data, file_size, chunk_size).await
+        resumable_upload(client, &normalized_dest, &file_data, file_size, chunk_size).await
     } else {
-        simple_upload(client, dest, &file_data).await
+        simple_upload(client, &normalized_dest, &file_data).await
     }
 }
 
 /// Simple upload (< 4MB)
-async fn simple_upload(
-    client: &GraphClient,
-    dest: &str,
-    data: &[u8],
-) -> Result<Value, MogError> {
+async fn simple_upload(client: &GraphClient, dest: &str, data: &[u8]) -> Result<Value, MogError> {
     let dest = dest.trim_start_matches('/');
     let path = format!("me/drive/root:/{}:/content", dest);
 
@@ -131,18 +186,27 @@ async fn resumable_upload(
         ..Default::default()
     };
 
-    let session_response = client.request(Method::POST, &session_path, &options).await?;
+    let session_response = client
+        .request(Method::POST, &session_path, &options)
+        .await?;
 
-    let upload_url = session_response.get("uploadUrl")
+    let upload_url = session_response
+        .get("uploadUrl")
         .and_then(|v| v.as_str())
         .ok_or_else(|| MogError::General("No uploadUrl in session response".into()))?
         .to_string();
 
-    eprintln!("Upload session created: {}", &upload_url[..80.min(upload_url.len())]);
+    eprintln!(
+        "Upload session created: {}",
+        &upload_url[..80.min(upload_url.len())]
+    );
 
     let mut session = UploadSession::new(upload_url.clone(), file_size, chunk_size);
 
-    if let Some(exp) = session_response.get("expirationDateTime").and_then(|v| v.as_str()) {
+    if let Some(exp) = session_response
+        .get("expirationDateTime")
+        .and_then(|v| v.as_str())
+    {
         session.expiration = Some(exp.to_string());
     }
 
@@ -158,14 +222,20 @@ async fn resumable_upload(
 
         eprintln!(
             "Uploading chunk: {} ({}/{})",
-            content_range, session.bytes_uploaded + content_length, file_size
+            content_range,
+            session.bytes_uploaded + content_length,
+            file_size
         );
 
-        let response = client.upload_bytes(&upload_url, chunk, &content_range, content_length).await?;
+        let response = client
+            .upload_bytes(&upload_url, chunk, &content_range, content_length)
+            .await?;
         let status = response.status();
 
         if status.is_success() {
-            let body = response.text().await
+            let body = response
+                .text()
+                .await
                 .map_err(|e| MogError::Network(format!("Failed to read upload response: {}", e)))?;
 
             session.bytes_uploaded += content_length;
@@ -183,7 +253,8 @@ async fn resumable_upload(
             let body = response.text().await.unwrap_or_default();
             return Err(MogError::General(format!(
                 "Upload chunk failed ({}): {}",
-                status.as_u16(), body
+                status.as_u16(),
+                body
             )));
         }
     }
@@ -193,6 +264,8 @@ async fn resumable_upload(
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     fn test_dest_path_normalization() {
         let dest = "/Shared/report.pdf";
@@ -223,5 +296,84 @@ mod tests {
         assert!(upload::validate_chunk_size(100).is_err());
         // Too big
         assert!(upload::validate_chunk_size(upload::MAX_CHUNK_SIZE + 1).is_err());
+    }
+
+    // --- Path traversal tests ---
+
+    #[test]
+    fn test_validate_dest_path_rejects_simple_traversal() {
+        assert!(validate_dest_path("../../etc/passwd").is_err());
+    }
+
+    #[test]
+    fn test_validate_dest_path_rejects_mid_traversal() {
+        assert!(validate_dest_path("Documents/../../../etc/passwd").is_err());
+    }
+
+    #[test]
+    fn test_validate_dest_path_accepts_double_dot_in_filename() {
+        // "my..file.txt" contains ".." but it is NOT a path component
+        assert!(validate_dest_path("my..file.txt").is_ok());
+    }
+
+    #[test]
+    fn test_validate_dest_path_accepts_valid_paths() {
+        assert!(validate_dest_path("Documents/report.pdf").is_ok());
+        assert!(validate_dest_path("/Shared/Files/test.docx").is_ok());
+    }
+
+    #[test]
+    fn test_validate_dest_path_rejects_empty() {
+        assert!(validate_dest_path("").is_err());
+    }
+
+    #[test]
+    fn test_validate_dest_path_rejects_control_chars() {
+        assert!(validate_dest_path("test\x00file").is_err());
+    }
+
+    #[test]
+    fn test_validate_dest_path_rejects_url_special_chars() {
+        assert!(validate_dest_path("test?file").is_err());
+        assert!(validate_dest_path("test#file").is_err());
+        assert!(validate_dest_path("test&file").is_err());
+        assert!(validate_dest_path("test%file").is_err());
+        assert!(validate_dest_path("test\\file").is_err());
+    }
+
+    // --- Percent-encoding tests ---
+
+    #[test]
+    fn test_search_query_encoding() {
+        let query = "budget report (2024)";
+        let encoded = utf8_percent_encode(query, NON_ALPHANUMERIC).to_string();
+        let path = format!("me/drive/root/search(q='{}')", encoded);
+        // Spaces, parens should be encoded
+        assert!(!path.contains(" (2024)"));
+        assert!(path.contains("%282024%29"));
+    }
+
+    #[test]
+    fn test_search_query_encoding_special_chars() {
+        let query = "it's a test";
+        let encoded = utf8_percent_encode(query, NON_ALPHANUMERIC).to_string();
+        // Single quote should be encoded
+        assert!(encoded.contains("%27"));
+    }
+
+    #[test]
+    fn test_search_query_encoding_unicode() {
+        let query = "rapport annuel";
+        let encoded = utf8_percent_encode(query, NON_ALPHANUMERIC).to_string();
+        let path = format!("me/drive/root/search(q='{}')", encoded);
+        assert!(path.contains("rapport"));
+        assert!(path.contains("annuel"));
+    }
+
+    #[test]
+    fn test_export_format_encoding() {
+        let format = "pdf";
+        let encoded = utf8_percent_encode(format, NON_ALPHANUMERIC).to_string();
+        assert_eq!(encoded, "pdf");
     }
 }

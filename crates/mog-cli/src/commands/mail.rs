@@ -4,15 +4,15 @@ use mog_core::output::{OutputFormat, OutputRenderer};
 use serde_json::json;
 
 pub async fn run(cli: &Cli, command: &MailCommands, format: OutputFormat) -> Result<(), MogError> {
-    let client = super::build_graph_client(
-        cli.profile.as_deref(),
-        &cli.api_version,
-        cli.trace,
-        cli.top,
-    )?;
+    let client =
+        super::build_graph_client(cli.profile.as_deref(), &cli.api_version, cli.trace, cli.top)?;
 
     match command {
-        MailCommands::List { unread, since, include_body } => {
+        MailCommands::List {
+            unread,
+            since,
+            include_body,
+        } => {
             let messages = mog_mail::list_messages(
                 &client,
                 *unread,
@@ -20,7 +20,8 @@ pub async fn run(cli: &Cli, command: &MailCommands, format: OutputFormat) -> Res
                 cli.top,
                 *include_body,
                 cli.all,
-            ).await?;
+            )
+            .await?;
 
             // Transform to summary format for table/plain output
             let output = if format == OutputFormat::Json {
@@ -59,48 +60,53 @@ pub async fn run(cli: &Cli, command: &MailCommands, format: OutputFormat) -> Res
             Ok(())
         }
 
-        MailCommands::Send { to, subject, body_file, attach } => {
+        MailCommands::Send {
+            to,
+            subject,
+            body_file,
+            attach,
+        } => {
             let body_content = if let Some(file) = body_file {
-                std::fs::read_to_string(file)
-                    .map_err(|e| MogError::General(format!("Failed to read body file '{}': {}", file, e)))?
+                std::fs::read_to_string(file).map_err(|e| {
+                    MogError::General(format!("Failed to read body file '{}': {}", file, e))
+                })?
             } else {
                 String::new()
             };
 
-            let result = mog_mail::send_message(&client, to, subject, &body_content, attach).await?;
+            let result =
+                mog_mail::send_message(&client, to, subject, &body_content, attach).await?;
             OutputRenderer::render_value(format, &result)?;
             eprintln!("Message sent.");
             Ok(())
         }
 
-        MailCommands::Attachments { command } => {
-            match command {
-                AttachmentCommands::List { id } => {
-                    let attachments = mog_mail::list_attachments(&client, id).await?;
-                    OutputRenderer::render_value(format, &serde_json::Value::Array(attachments))?;
-                    Ok(())
-                }
-                AttachmentCommands::Download { id, out_dir, attachment_id, out } => {
-                    let dir = out_dir.as_deref()
-                        .or(out.as_deref())
-                        .unwrap_or(".");
-                    let downloaded = mog_mail::download_attachments(
-                        &client,
-                        id,
-                        dir,
-                        attachment_id.as_deref(),
-                    ).await?;
-
-                    for path in &downloaded {
-                        eprintln!("Downloaded: {}", path);
-                    }
-
-                    let result = json!({"downloaded": downloaded});
-                    OutputRenderer::render_value(format, &result)?;
-                    Ok(())
-                }
+        MailCommands::Attachments { command } => match command {
+            AttachmentCommands::List { id } => {
+                let attachments = mog_mail::list_attachments(&client, id).await?;
+                OutputRenderer::render_value(format, &serde_json::Value::Array(attachments))?;
+                Ok(())
             }
-        }
+            AttachmentCommands::Download {
+                id,
+                out_dir,
+                attachment_id,
+                out,
+            } => {
+                let dir = out_dir.as_deref().or(out.as_deref()).unwrap_or(".");
+                let downloaded =
+                    mog_mail::download_attachments(&client, id, dir, attachment_id.as_deref())
+                        .await?;
+
+                for path in &downloaded {
+                    eprintln!("Downloaded: {}", path);
+                }
+
+                let result = json!({"downloaded": downloaded});
+                OutputRenderer::render_value(format, &result)?;
+                Ok(())
+            }
+        },
     }
 }
 

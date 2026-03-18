@@ -79,7 +79,10 @@ mod tests {
 
     #[test]
     fn test_parse_retry_after_seconds() {
-        assert_eq!(RetryConfig::parse_retry_after("5"), Some(Duration::from_secs(5)));
+        assert_eq!(
+            RetryConfig::parse_retry_after("5"),
+            Some(Duration::from_secs(5))
+        );
     }
 
     #[test]

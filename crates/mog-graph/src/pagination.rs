@@ -17,8 +17,7 @@ pub fn extract_values(body: &Value) -> Vec<Value> {
 
 /// Extract @odata.count if present
 pub fn extract_count(body: &Value) -> Option<u64> {
-    body.get("@odata.count")
-        .and_then(|v| v.as_u64())
+    body.get("@odata.count").and_then(|v| v.as_u64())
 }
 
 /// Normalize a nextLink URL to be absolute
@@ -62,7 +61,10 @@ mod tests {
     #[test]
     fn test_normalize_next_link_absolute() {
         let link = "https://graph.microsoft.com/v1.0/me/messages?$skip=25";
-        assert_eq!(normalize_next_link(link, "https://graph.microsoft.com"), link);
+        assert_eq!(
+            normalize_next_link(link, "https://graph.microsoft.com"),
+            link
+        );
     }
 
     #[test]

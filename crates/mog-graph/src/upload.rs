@@ -130,8 +130,8 @@ mod tests {
 
     #[test]
     fn test_default_chunk_size_valid() {
-        assert!(DEFAULT_CHUNK_SIZE >= MIN_CHUNK_SIZE);
-        assert!(DEFAULT_CHUNK_SIZE <= MAX_CHUNK_SIZE);
+        const { assert!(DEFAULT_CHUNK_SIZE >= MIN_CHUNK_SIZE) };
+        const { assert!(DEFAULT_CHUNK_SIZE <= MAX_CHUNK_SIZE) };
         assert_eq!(DEFAULT_CHUNK_SIZE, 5 * 1024 * 1024);
     }
 
